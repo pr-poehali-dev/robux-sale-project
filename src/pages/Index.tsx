@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import Icon from "@/components/ui/icon";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,6 +29,13 @@ type Review = {
   rating: number;
   text: string;
   date: string;
+};
+
+type LogEntry = {
+  id: number;
+  timestamp: string;
+  action: string;
+  details: string;
 };
 
 type Currency = "RUB" | "EUR" | "UAH";
@@ -52,10 +60,10 @@ const products: Product[] = [
   { id: "5", name: "Mega Pack", amount: "1700 RB", price: 900, oldPrice: 1200, badge: "-25%", game: "robux" },
   { id: "6", name: "Ultra Pack", amount: "4500 RB", price: 2100, oldPrice: 2800, game: "robux" },
   
-  { id: "s1", name: "Starter Gold", amount: "1000 G", price: 891, game: "standoff" },
-  { id: "s2", name: "Gold Pack", amount: "2500 G", price: 1791, oldPrice: 2250, badge: "ХИТ", game: "standoff" },
-  { id: "s3", name: "Mega Gold", amount: "5000 G", price: 3150, oldPrice: 4050, badge: "ВЫГОДНО", game: "standoff" },
-  { id: "s4", name: "Ultra Gold", amount: "10000 G", price: 5850, oldPrice: 8100, badge: "-28%", game: "standoff" },
+  { id: "s1", name: "Starter Gold", amount: "1000 G", price: 821, game: "standoff" },
+  { id: "s2", name: "Gold Pack", amount: "2500 G", price: 1721, oldPrice: 2180, badge: "ХИТ", game: "standoff" },
+  { id: "s3", name: "Mega Gold", amount: "5000 G", price: 3080, oldPrice: 3980, badge: "ВЫГОДНО", game: "standoff" },
+  { id: "s4", name: "Ultra Gold", amount: "10000 G", price: 5780, oldPrice: 8030, badge: "-28%", game: "standoff" },
 
   { id: "t1", name: "Starter Stars", amount: "15 ⭐", price: 99, game: "telegram" },
   { id: "t2", name: "Popular Stars", amount: "50 ⭐", price: 199, oldPrice: 250, badge: "ХИТ", game: "telegram" },
@@ -86,6 +94,13 @@ export default function Index() {
   const [newReviewText, setNewReviewText] = useState("");
   const [newReviewRating, setNewReviewRating] = useState(5);
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
+  const [isPromoDialogOpen, setIsPromoDialogOpen] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [isAdminPanel, setIsAdminPanel] = useState(false);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [robloxPassUrl, setRobloxPassUrl] = useState("");
+  const [standoffId, setStandoffId] = useState("");
+  const [telegramUsername, setTelegramUsername] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -93,7 +108,19 @@ export default function Index() {
     if (savedReviews) {
       setReviews(JSON.parse(savedReviews));
     }
+    addLog("Система запущена", "Приложение загружено");
   }, []);
+
+  const addLog = (action: string, details: string) => {
+    const newLog: LogEntry = {
+      id: Date.now(),
+      timestamp: new Date().toLocaleString('ru-RU'),
+      action,
+      details,
+    };
+    setLogs(prev => [newLog, ...prev]);
+    console.log(`[${newLog.timestamp}] ${action}: ${details}`);
+  };
 
   const convertPrice = (price: number) => {
     return Math.round(price * currencyRates[currency]);
@@ -103,8 +130,32 @@ export default function Index() {
     return `${convertPrice(price)}${currencySymbols[currency]}`;
   };
 
+  const handlePromoCode = () => {
+    addLog("Промокод введен", `Код: ${promoCode}`);
+    if (promoCode === "RBSHOPADM") {
+      setIsAdminPanel(true);
+      setIsPromoDialogOpen(false);
+      addLog("Админ-панель", "Доступ открыт");
+      toast({
+        title: "Админ-панель активирована! 🔓",
+        description: "Все действия теперь логируются в консоль",
+      });
+    } else {
+      addLog("Промокод неверный", `Попытка: ${promoCode}`);
+      toast({
+        title: "Неверный промокод",
+        description: "Попробуйте другой код",
+        variant: "destructive",
+      });
+    }
+    setPromoCode("");
+  };
+
   const addToCart = (product: Product) => {
+    addLog("Добавление в корзину", `${product.name} - ${formatPrice(product.price)}`);
+    
     if (!isLoggedIn) {
+      addLog("Ошибка добавления", "Требуется авторизация");
       toast({
         title: "Требуется регистрация",
         description: "Зарегистрируйтесь или войдите, чтобы добавлять товары в корзину",
@@ -115,6 +166,7 @@ export default function Index() {
     }
 
     setCart([...cart, product]);
+    addLog("Товар добавлен", `${product.name} от пользователя ${username}`);
     toast({
       title: "Добавлено в корзину! 🎮",
       description: `${product.name} - ${formatPrice(product.price)}`,
@@ -122,6 +174,8 @@ export default function Index() {
   };
 
   const removeFromCart = (index: number) => {
+    const item = cart[index];
+    addLog("Удаление из корзины", `${item.name} - ${formatPrice(item.price)}`);
     const newCart = cart.filter((_, i) => i !== index);
     setCart(newCart);
     toast({
@@ -133,6 +187,7 @@ export default function Index() {
   const getTotalPrice = () => cart.reduce((sum, item) => sum + item.price, 0);
 
   const handleAuth = (name: string, email: string) => {
+    addLog("Авторизация", `Пользователь: ${name}, Email: ${email}`);
     setUsername(name);
     setUserEmail(email);
     setIsLoggedIn(true);
@@ -144,7 +199,10 @@ export default function Index() {
   };
 
   const handleCheckout = () => {
+    addLog("Оформление заказа", `Попытка оплаты на сумму ${formatPrice(getTotalPrice())}`);
+    
     if (!cardNumber || cardNumber.length < 16) {
+      addLog("Ошибка оплаты", "Некорректный номер карты");
       toast({
         title: "Ошибка",
         description: "Введите корректный номер карты",
@@ -153,25 +211,81 @@ export default function Index() {
       return;
     }
 
+    const robuxItems = cart.filter(item => item.game === "robux");
+    const standoffItems = cart.filter(item => item.game === "standoff");
+    const telegramItems = cart.filter(item => item.game === "telegram");
+
+    if (robuxItems.length > 0 && !robloxPassUrl) {
+      addLog("Ошибка оплаты", "Не указана ссылка на Roblox Pass");
+      toast({
+        title: "Ошибка",
+        description: "Укажите ссылку на Roblox Game Pass для получения Robux",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (standoffItems.length > 0 && !standoffId) {
+      addLog("Ошибка оплаты", "Не указан ID Standoff 2");
+      toast({
+        title: "Ошибка",
+        description: "Укажите ваш ID в Standoff 2",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (telegramItems.length > 0 && !telegramUsername) {
+      addLog("Ошибка оплаты", "Не указан Telegram Username");
+      toast({
+        title: "Ошибка",
+        description: "Укажите ваш Username в Telegram",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const orderDetails = cart.map(item => `${item.name} (${item.amount}) - ${formatPrice(item.price)}`).join('\n');
-    const telegramMessage = `🎮 Новый заказ!\n\nКлиент: ${username}\nEmail: ${userEmail}\n\nТовары:\n${orderDetails}\n\nИтого: ${formatPrice(getTotalPrice())}`;
+    let deliveryInfo = "\n\nДанные для доставки:\n";
+    
+    if (robuxItems.length > 0) {
+      deliveryInfo += `Roblox Pass: ${robloxPassUrl}\n`;
+    }
+    if (standoffItems.length > 0) {
+      deliveryInfo += `Standoff 2 ID: ${standoffId}\n`;
+    }
+    if (telegramItems.length > 0) {
+      deliveryInfo += `Telegram: @${telegramUsername}\n`;
+    }
+
+    const telegramMessage = `🎮 Новый заказ!\n\nКлиент: ${username}\nEmail: ${userEmail}\n\nТовары:\n${orderDetails}\n\nИтого: ${formatPrice(getTotalPrice())}${deliveryInfo}`;
+    
+    addLog("Покупка совершена", `${username} купил на ${formatPrice(getTotalPrice())}`);
+    addLog("Детали заказа", orderDetails);
+    addLog("Данные доставки", deliveryInfo);
     
     const telegramUrl = `https://t.me/hellowen69?text=${encodeURIComponent(telegramMessage)}`;
     window.open(telegramUrl, '_blank');
 
     toast({
       title: "Успешно! ✅",
-      description: `Оплата на сумму ${formatPrice(getTotalPrice())} прошла успешно! Товары будут доставлены в течение 5 минут. Данные о заказе отправлены продавцу.`,
+      description: `Оплата на сумму ${formatPrice(getTotalPrice())} прошла успешно! Товары будут доставлены в течение 5 минут.`,
     });
 
     setCart([]);
     setCardNumber("");
+    setRobloxPassUrl("");
+    setStandoffId("");
+    setTelegramUsername("");
     setIsCheckoutOpen(false);
     setIsCartOpen(false);
   };
 
   const handleAddReview = () => {
+    addLog("Добавление отзыва", `Пользователь: ${username}, Рейтинг: ${newReviewRating}`);
+    
     if (!isLoggedIn) {
+      addLog("Ошибка отзыва", "Требуется авторизация");
       toast({
         title: "Требуется регистрация",
         description: "Войдите в аккаунт, чтобы оставить отзыв",
@@ -182,6 +296,7 @@ export default function Index() {
     }
 
     if (!newReviewText.trim()) {
+      addLog("Ошибка отзыва", "Пустой текст отзыва");
       toast({
         title: "Ошибка",
         description: "Напишите текст отзыва",
@@ -202,6 +317,8 @@ export default function Index() {
     setReviews(updatedReviews);
     localStorage.setItem('rbshop_reviews', JSON.stringify(updatedReviews));
 
+    addLog("Отзыв добавлен", `${username}: "${newReviewText.substring(0, 50)}..."`);
+
     toast({
       title: "Отзыв добавлен! ⭐",
       description: "Спасибо за ваш отзыв!",
@@ -216,6 +333,34 @@ export default function Index() {
   const standoffProducts = products.filter(p => p.game === "standoff");
   const telegramProducts = products.filter(p => p.game === "telegram");
   const dealsProducts = products.filter(p => p.badge && p.oldPrice);
+
+  const renderProductCard = (product: Product) => (
+    <Card key={product.id} className="group hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/20">
+      <CardHeader>
+        <div className="flex items-start justify-between mb-2">
+          <CardTitle className="text-2xl font-heading">{product.name}</CardTitle>
+          {product.badge && (
+            <Badge className="bg-secondary text-secondary-foreground">{product.badge}</Badge>
+          )}
+        </div>
+        <CardDescription className="text-3xl font-bold text-primary">{product.amount}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-baseline gap-3">
+          <span className="text-4xl font-bold">{formatPrice(product.price)}</span>
+          {product.oldPrice && (
+            <span className="text-xl text-muted-foreground line-through">{formatPrice(product.oldPrice)}</span>
+          )}
+        </div>
+      </CardContent>
+      <CardFooter>
+        <Button className="w-full bg-gradient-to-r from-primary to-secondary" onClick={() => addToCart(product)}>
+          <Icon name="ShoppingCart" className="mr-2" size={18} />
+          Добавить
+        </Button>
+      </CardFooter>
+    </Card>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-card">
@@ -232,40 +377,88 @@ export default function Index() {
             </div>
 
             <div className="hidden md:flex items-center gap-6">
-              <button
-                onClick={() => setActiveSection("home")}
-                className={`transition-all ${activeSection === "home" ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                Главная
-              </button>
-              <button
-                onClick={() => setActiveSection("shop")}
-                className={`transition-all ${activeSection === "shop" ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                Robux
-              </button>
-              <button
-                onClick={() => setActiveSection("standoff")}
-                className={`transition-all ${activeSection === "standoff" ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                Standoff 2
-              </button>
-              <button
-                onClick={() => setActiveSection("telegram")}
-                className={`transition-all ${activeSection === "telegram" ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                Telegram Stars
-              </button>
-              <button
-                onClick={() => setActiveSection("deals")}
-                className={`transition-all ${activeSection === "deals" ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                Акции
-              </button>
+              {["home", "shop", "standoff", "telegram", "deals"].map((section) => (
+                <button
+                  key={section}
+                  onClick={() => {
+                    setActiveSection(section as typeof activeSection);
+                    addLog("Навигация", `Переход на ${section}`);
+                  }}
+                  className={`transition-all ${activeSection === section ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {section === "home" && "Главная"}
+                  {section === "shop" && "Robux"}
+                  {section === "standoff" && "Standoff 2"}
+                  {section === "telegram" && "Telegram Stars"}
+                  {section === "deals" && "Акции"}
+                </button>
+              ))}
             </div>
 
             <div className="flex items-center gap-3">
-              <Select value={currency} onValueChange={(val) => setCurrency(val as Currency)}>
+              <Dialog open={isPromoDialogOpen} onOpenChange={setIsPromoDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <Icon name="Tag" size={20} />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Введите промокод</DialogTitle>
+                    <DialogDescription>Получите скидку или специальные возможности</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-4">
+                    <Input
+                      placeholder="Введите промокод"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                    />
+                    <Button className="w-full bg-gradient-to-r from-primary to-secondary" onClick={handlePromoCode}>
+                      <Icon name="CheckCircle" className="mr-2" size={18} />
+                      Применить
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {isAdminPanel && (
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="destructive" size="icon">
+                      <Icon name="Shield" size={20} />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent className="w-[600px]">
+                    <SheetHeader>
+                      <SheetTitle>🔐 Админ-панель</SheetTitle>
+                      <SheetDescription>Консоль логов всех действий</SheetDescription>
+                    </SheetHeader>
+                    <ScrollArea className="h-[calc(100vh-150px)] mt-6">
+                      <div className="space-y-2">
+                        {logs.map((log) => (
+                          <Card key={log.id} className="p-3">
+                            <div className="flex items-start gap-2">
+                              <Icon name="Terminal" size={16} className="mt-1 text-primary" />
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-sm font-bold text-primary">{log.action}</span>
+                                  <span className="text-xs text-muted-foreground">{log.timestamp}</span>
+                                </div>
+                                <p className="text-sm text-muted-foreground break-words">{log.details}</p>
+                              </div>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </SheetContent>
+                </Sheet>
+              )}
+
+              <Select value={currency} onValueChange={(val) => {
+                setCurrency(val as Currency);
+                addLog("Смена валюты", `Выбрана: ${val}`);
+              }}>
                 <SelectTrigger className="w-24">
                   <SelectValue />
                 </SelectTrigger>
@@ -410,16 +603,56 @@ export default function Index() {
       </nav>
 
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Оформление заказа</DialogTitle>
-            <DialogDescription>Введите данные карты для оплаты</DialogDescription>
+            <DialogDescription>Заполните все поля для успешной доставки</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <div className="p-4 bg-muted rounded-lg">
               <p className="text-sm text-muted-foreground mb-2">Итого к оплате:</p>
               <p className="text-3xl font-bold text-primary">{formatPrice(getTotalPrice())}</p>
             </div>
+
+            {cart.some(item => item.game === "robux") && (
+              <div className="space-y-2">
+                <Label htmlFor="roblox-pass">Ссылка на Roblox Game Pass</Label>
+                <Input 
+                  id="roblox-pass" 
+                  placeholder="https://www.roblox.com/game-pass/..." 
+                  value={robloxPassUrl}
+                  onChange={(e) => setRobloxPassUrl(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Robux будут зачислены через покупку Game Pass</p>
+              </div>
+            )}
+
+            {cart.some(item => item.game === "standoff") && (
+              <div className="space-y-2">
+                <Label htmlFor="standoff-id">Ваш ID в Standoff 2</Label>
+                <Input 
+                  id="standoff-id" 
+                  placeholder="Например: 12345678" 
+                  value={standoffId}
+                  onChange={(e) => setStandoffId(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">ID можно найти в настройках профиля игры</p>
+              </div>
+            )}
+
+            {cart.some(item => item.game === "telegram") && (
+              <div className="space-y-2">
+                <Label htmlFor="telegram-username">Username в Telegram</Label>
+                <Input 
+                  id="telegram-username" 
+                  placeholder="Например: username" 
+                  value={telegramUsername}
+                  onChange={(e) => setTelegramUsername(e.target.value.replace('@', ''))}
+                />
+                <p className="text-xs text-muted-foreground">Укажите username без @</p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="card-number">Номер карты</Label>
               <Input 
@@ -527,33 +760,7 @@ export default function Index() {
             <section>
               <h2 className="text-4xl font-heading font-bold mb-8">Популярные предложения</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {dealsProducts.slice(0, 3).map((product) => (
-                  <Card key={product.id} className="group hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/20 border-2 border-primary/20">
-                    <CardHeader>
-                      <div className="flex items-start justify-between mb-2">
-                        <CardTitle className="text-2xl font-heading">{product.name}</CardTitle>
-                        {product.badge && (
-                          <Badge className="bg-secondary text-secondary-foreground">{product.badge}</Badge>
-                        )}
-                      </div>
-                      <CardDescription className="text-3xl font-bold text-primary">{product.amount}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-4xl font-bold">{formatPrice(product.price)}</span>
-                        {product.oldPrice && (
-                          <span className="text-xl text-muted-foreground line-through">{formatPrice(product.oldPrice)}</span>
-                        )}
-                      </div>
-                    </CardContent>
-                    <CardFooter>
-                      <Button className="w-full bg-gradient-to-r from-primary to-secondary group-hover:shadow-lg" onClick={() => addToCart(product)}>
-                        <Icon name="ShoppingCart" className="mr-2" size={18} />
-                        Купить
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))}
+                {dealsProducts.slice(0, 3).map(renderProductCard)}
               </div>
             </section>
 
@@ -607,33 +814,7 @@ export default function Index() {
               <p className="text-xl text-muted-foreground">Выберите подходящий пакет для Roblox</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {robuxProducts.map((product) => (
-                <Card key={product.id} className="group hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/20">
-                  <CardHeader>
-                    <div className="flex items-start justify-between mb-2">
-                      <CardTitle className="text-2xl font-heading">{product.name}</CardTitle>
-                      {product.badge && (
-                        <Badge className="bg-secondary text-secondary-foreground">{product.badge}</Badge>
-                      )}
-                    </div>
-                    <CardDescription className="text-3xl font-bold text-primary">{product.amount}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-baseline gap-3">
-                      <span className="text-4xl font-bold">{formatPrice(product.price)}</span>
-                      {product.oldPrice && (
-                        <span className="text-xl text-muted-foreground line-through">{formatPrice(product.oldPrice)}</span>
-                      )}
-                    </div>
-                  </CardContent>
-                  <CardFooter>
-                    <Button className="w-full bg-gradient-to-r from-primary to-secondary" onClick={() => addToCart(product)}>
-                      <Icon name="ShoppingCart" className="mr-2" size={18} />
-                      Добавить
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
+              {robuxProducts.map(renderProductCard)}
             </div>
           </div>
         )}
@@ -647,33 +828,7 @@ export default function Index() {
               <p className="text-xl text-muted-foreground">Пополните золото для Standoff 2</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {standoffProducts.map((product) => (
-                <Card key={product.id} className="group hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-accent/20">
-                  <CardHeader>
-                    <div className="flex items-start justify-between mb-2">
-                      <CardTitle className="text-2xl font-heading">{product.name}</CardTitle>
-                      {product.badge && (
-                        <Badge className="bg-secondary text-secondary-foreground">{product.badge}</Badge>
-                      )}
-                    </div>
-                    <CardDescription className="text-3xl font-bold text-accent">{product.amount}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-baseline gap-3">
-                      <span className="text-4xl font-bold">{formatPrice(product.price)}</span>
-                      {product.oldPrice && (
-                        <span className="text-xl text-muted-foreground line-through">{formatPrice(product.oldPrice)}</span>
-                      )}
-                    </div>
-                  </CardContent>
-                  <CardFooter>
-                    <Button className="w-full bg-gradient-to-r from-accent to-secondary" onClick={() => addToCart(product)}>
-                      <Icon name="ShoppingCart" className="mr-2" size={18} />
-                      Добавить
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
+              {standoffProducts.map(renderProductCard)}
             </div>
           </div>
         )}
@@ -687,33 +842,7 @@ export default function Index() {
               <p className="text-xl text-muted-foreground">Покупайте звезды для Telegram по выгодным ценам</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {telegramProducts.map((product) => (
-                <Card key={product.id} className="group hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-accent/20">
-                  <CardHeader>
-                    <div className="flex items-start justify-between mb-2">
-                      <CardTitle className="text-2xl font-heading">{product.name}</CardTitle>
-                      {product.badge && (
-                        <Badge className="bg-secondary text-secondary-foreground">{product.badge}</Badge>
-                      )}
-                    </div>
-                    <CardDescription className="text-3xl font-bold text-accent">{product.amount}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-baseline gap-3">
-                      <span className="text-4xl font-bold">{formatPrice(product.price)}</span>
-                      {product.oldPrice && (
-                        <span className="text-xl text-muted-foreground line-through">{formatPrice(product.oldPrice)}</span>
-                      )}
-                    </div>
-                  </CardContent>
-                  <CardFooter>
-                    <Button className="w-full bg-gradient-to-r from-accent to-primary" onClick={() => addToCart(product)}>
-                      <Icon name="ShoppingCart" className="mr-2" size={18} />
-                      Добавить
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
+              {telegramProducts.map(renderProductCard)}
             </div>
           </div>
         )}
