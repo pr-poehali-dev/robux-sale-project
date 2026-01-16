@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Icon from "@/components/ui/icon";
 import { useToast } from "@/hooks/use-toast";
 
@@ -17,7 +18,21 @@ type Product = {
   price: number;
   oldPrice?: number;
   badge?: string;
-  game: "robux" | "standoff";
+  game: "robux" | "standoff" | "telegram";
+};
+
+type Currency = "RUB" | "EUR" | "UAH";
+
+const currencyRates: Record<Currency, number> = {
+  RUB: 1,
+  EUR: 0.01,
+  UAH: 0.4,
+};
+
+const currencySymbols: Record<Currency, string> = {
+  RUB: "₽",
+  EUR: "€",
+  UAH: "₴",
 };
 
 const products: Product[] = [
@@ -28,24 +43,49 @@ const products: Product[] = [
   { id: "5", name: "Mega Pack", amount: "1700 RB", price: 900, oldPrice: 1200, badge: "-25%", game: "robux" },
   { id: "6", name: "Ultra Pack", amount: "4500 RB", price: 2100, oldPrice: 2800, game: "robux" },
   
-  { id: "s1", name: "Starter Gold", amount: "1000 G", price: 99, game: "standoff" },
-  { id: "s2", name: "Gold Pack", amount: "2500 G", price: 199, oldPrice: 250, badge: "ХИТ", game: "standoff" },
-  { id: "s3", name: "Mega Gold", amount: "5000 G", price: 350, oldPrice: 450, badge: "ВЫГОДНО", game: "standoff" },
-  { id: "s4", name: "Ultra Gold", amount: "10000 G", price: 650, oldPrice: 900, badge: "-28%", game: "standoff" },
+  { id: "s1", name: "Starter Gold", amount: "1000 G", price: 297, game: "standoff" },
+  { id: "s2", name: "Gold Pack", amount: "2500 G", price: 597, oldPrice: 750, badge: "ХИТ", game: "standoff" },
+  { id: "s3", name: "Mega Gold", amount: "5000 G", price: 1050, oldPrice: 1350, badge: "ВЫГОДНО", game: "standoff" },
+  { id: "s4", name: "Ultra Gold", amount: "10000 G", price: 1950, oldPrice: 2700, badge: "-28%", game: "standoff" },
+
+  { id: "t1", name: "Starter Stars", amount: "15 ⭐", price: 99, game: "telegram" },
+  { id: "t2", name: "Popular Stars", amount: "50 ⭐", price: 199, oldPrice: 250, badge: "ХИТ", game: "telegram" },
+  { id: "t3", name: "Mega Stars", amount: "100 ⭐", price: 350, oldPrice: 450, game: "telegram" },
+  { id: "t4", name: "Ultra Stars", amount: "250 ⭐", price: 750, oldPrice: 950, badge: "ВЫГОДНО", game: "telegram" },
+];
+
+const reviews = [
+  { id: 1, name: "Александр", rating: 5, text: "Отличный магазин! Робуксы пришли моментально, цены реально ниже чем везде!", date: "15.01.2026" },
+  { id: 2, name: "Мария", rating: 5, text: "Покупала голду для Standoff 2, всё быстро и без проблем. Рекомендую!", date: "14.01.2026" },
+  { id: 3, name: "Дмитрий", rating: 5, text: "Звезды для Telegram пришли за минуту. Поддержка отвечает быстро. Супер!", date: "13.01.2026" },
+  { id: 4, name: "Анна", rating: 5, text: "Самые низкие цены! Уже третий раз покупаю, всегда всё отлично 🔥", date: "12.01.2026" },
+  { id: 5, name: "Игорь", rating: 5, text: "Быстро, надежно, дешево. Что еще нужно? Всем советую!", date: "11.01.2026" },
 ];
 
 export default function Index() {
-  const [activeSection, setActiveSection] = useState<"home" | "shop" | "standoff" | "deals">("home");
+  const [activeSection, setActiveSection] = useState<"home" | "shop" | "standoff" | "deals" | "telegram">("home");
   const [cart, setCart] = useState<Product[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
+  const [currency, setCurrency] = useState<Currency>("RUB");
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [cardNumber, setCardNumber] = useState("");
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const { toast } = useToast();
+
+  const convertPrice = (price: number) => {
+    return Math.round(price * currencyRates[currency]);
+  };
+
+  const formatPrice = (price: number) => {
+    return `${convertPrice(price)}${currencySymbols[currency]}`;
+  };
 
   const addToCart = (product: Product) => {
     setCart([...cart, product]);
     toast({
       title: "Добавлено в корзину! 🎮",
-      description: `${product.name} - ${product.price}₽`,
+      description: `${product.name} - ${formatPrice(product.price)}`,
     });
   };
 
@@ -60,8 +100,30 @@ export default function Index() {
     });
   };
 
+  const handleCheckout = () => {
+    if (!cardNumber || cardNumber.length < 16) {
+      toast({
+        title: "Ошибка",
+        description: "Введите корректный номер карты",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Успешно! ✅",
+      description: `Оплата на сумму ${formatPrice(getTotalPrice())} прошла успешно! Товары будут доставлены в течение 5 минут.`,
+    });
+
+    setCart([]);
+    setCardNumber("");
+    setIsCheckoutOpen(false);
+    setIsCartOpen(false);
+  };
+
   const robuxProducts = products.filter(p => p.game === "robux");
   const standoffProducts = products.filter(p => p.game === "standoff");
+  const telegramProducts = products.filter(p => p.game === "telegram");
   const dealsProducts = products.filter(p => p.badge && p.oldPrice);
 
   return (
@@ -74,7 +136,7 @@ export default function Index() {
                 <Icon name="Gamepad2" className="text-white" size={24} />
               </div>
               <span className="text-2xl font-heading font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                GameShop
+                RBShop
               </span>
             </div>
 
@@ -89,13 +151,19 @@ export default function Index() {
                 onClick={() => setActiveSection("shop")}
                 className={`transition-all ${activeSection === "shop" ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}
               >
-                Магазин
+                Robux
               </button>
               <button
                 onClick={() => setActiveSection("standoff")}
                 className={`transition-all ${activeSection === "standoff" ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Standoff 2
+              </button>
+              <button
+                onClick={() => setActiveSection("telegram")}
+                className={`transition-all ${activeSection === "telegram" ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Telegram Stars
               </button>
               <button
                 onClick={() => setActiveSection("deals")}
@@ -106,7 +174,18 @@ export default function Index() {
             </div>
 
             <div className="flex items-center gap-3">
-              <Sheet>
+              <Select value={currency} onValueChange={(val) => setCurrency(val as Currency)}>
+                <SelectTrigger className="w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="RUB">₽ RUB</SelectItem>
+                  <SelectItem value="EUR">€ EUR</SelectItem>
+                  <SelectItem value="UAH">₴ UAH</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" size="icon" className="relative">
                     <Icon name="ShoppingCart" size={20} />
@@ -131,16 +210,20 @@ export default function Index() {
                           <p className="font-semibold">{item.name}</p>
                           <p className="text-sm text-muted-foreground">{item.amount}</p>
                         </div>
-                        <p className="font-bold text-primary">{item.price}₽</p>
+                        <p className="font-bold text-primary">{formatPrice(item.price)}</p>
                       </div>
                     ))}
                     {cart.length > 0 && (
                       <div className="pt-4 border-t">
                         <div className="flex justify-between items-center mb-4">
                           <span className="text-lg font-bold">Итого:</span>
-                          <span className="text-2xl font-bold text-primary">{getTotalPrice()}₽</span>
+                          <span className="text-2xl font-bold text-primary">{formatPrice(getTotalPrice())}</span>
                         </div>
-                        <Button className="w-full bg-gradient-to-r from-primary to-secondary" size="lg">
+                        <Button 
+                          className="w-full bg-gradient-to-r from-primary to-secondary" 
+                          size="lg"
+                          onClick={() => setIsCheckoutOpen(true)}
+                        >
                           <Icon name="CreditCard" className="mr-2" size={18} />
                           Оформить заказ
                         </Button>
@@ -218,6 +301,49 @@ export default function Index() {
         </div>
       </nav>
 
+      <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Оформление заказа</DialogTitle>
+            <DialogDescription>Введите данные карты для оплаты</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="p-4 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground mb-2">Итого к оплате:</p>
+              <p className="text-3xl font-bold text-primary">{formatPrice(getTotalPrice())}</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="card-number">Номер карты</Label>
+              <Input 
+                id="card-number" 
+                placeholder="1234 5678 9012 3456" 
+                value={cardNumber}
+                onChange={(e) => setCardNumber(e.target.value.replace(/\s/g, ''))}
+                maxLength={16}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="expiry">Срок действия</Label>
+                <Input id="expiry" placeholder="MM/YY" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cvv">CVV</Label>
+                <Input id="cvv" placeholder="123" maxLength={3} />
+              </div>
+            </div>
+            <Button 
+              className="w-full bg-gradient-to-r from-primary to-secondary" 
+              size="lg"
+              onClick={handleCheckout}
+            >
+              <Icon name="CheckCircle" className="mr-2" size={18} />
+              Оплатить {formatPrice(getTotalPrice())}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <main className="container mx-auto px-4 py-12">
         {activeSection === "home" && (
           <div className="space-y-16 animate-fade-in">
@@ -227,14 +353,14 @@ export default function Index() {
                   Игровая валюта по лучшим ценам!
                 </h1>
                 <p className="text-xl text-muted-foreground mb-8">
-                  Robux для Roblox и голда для Standoff 2. Мгновенная доставка, безопасные платежи.
+                  Robux для Roblox, голда для Standoff 2 и звезды для Telegram. Мгновенная доставка, безопасные платежи.
                 </p>
                 <div className="flex flex-wrap gap-4">
                   <Button size="lg" className="bg-gradient-to-r from-primary to-secondary" onClick={() => setActiveSection("shop")}>
                     <Icon name="ShoppingBag" className="mr-2" size={20} />
                     В магазин
                   </Button>
-                  <Button size="lg" variant="outline">
+                  <Button size="lg" variant="outline" onClick={() => setActiveSection("deals")}>
                     <Icon name="Gift" className="mr-2" size={20} />
                     Акции
                   </Button>
@@ -260,9 +386,9 @@ export default function Index() {
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-baseline gap-3">
-                        <span className="text-4xl font-bold">{product.price}₽</span>
+                        <span className="text-4xl font-bold">{formatPrice(product.price)}</span>
                         {product.oldPrice && (
-                          <span className="text-xl text-muted-foreground line-through">{product.oldPrice}₽</span>
+                          <span className="text-xl text-muted-foreground line-through">{formatPrice(product.oldPrice)}</span>
                         )}
                       </div>
                     </CardContent>
@@ -272,6 +398,30 @@ export default function Index() {
                         Купить
                       </Button>
                     </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-4xl font-heading font-bold mb-8">Отзывы наших клиентов</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {reviews.map((review) => (
+                  <Card key={review.id} className="hover:scale-105 transition-all duration-300">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-xl">{review.name}</CardTitle>
+                        <div className="flex gap-1">
+                          {Array.from({ length: review.rating }).map((_, i) => (
+                            <Icon key={i} name="Star" size={16} className="fill-secondary text-secondary" />
+                          ))}
+                        </div>
+                      </div>
+                      <CardDescription className="text-xs">{review.date}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-muted-foreground">{review.text}</p>
+                    </CardContent>
                   </Card>
                 ))}
               </div>
@@ -301,9 +451,9 @@ export default function Index() {
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-baseline gap-3">
-                      <span className="text-4xl font-bold">{product.price}₽</span>
+                      <span className="text-4xl font-bold">{formatPrice(product.price)}</span>
                       {product.oldPrice && (
-                        <span className="text-xl text-muted-foreground line-through">{product.oldPrice}₽</span>
+                        <span className="text-xl text-muted-foreground line-through">{formatPrice(product.oldPrice)}</span>
                       )}
                     </div>
                   </CardContent>
@@ -341,14 +491,54 @@ export default function Index() {
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-baseline gap-3">
-                      <span className="text-4xl font-bold">{product.price}₽</span>
+                      <span className="text-4xl font-bold">{formatPrice(product.price)}</span>
                       {product.oldPrice && (
-                        <span className="text-xl text-muted-foreground line-through">{product.oldPrice}₽</span>
+                        <span className="text-xl text-muted-foreground line-through">{formatPrice(product.oldPrice)}</span>
                       )}
                     </div>
                   </CardContent>
                   <CardFooter>
                     <Button className="w-full bg-gradient-to-r from-accent to-secondary" onClick={() => addToCart(product)}>
+                      <Icon name="ShoppingCart" className="mr-2" size={18} />
+                      Добавить
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeSection === "telegram" && (
+          <div className="space-y-8 animate-fade-in">
+            <div>
+              <h1 className="text-5xl font-heading font-bold mb-4 bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
+                Telegram Stars ⭐
+              </h1>
+              <p className="text-xl text-muted-foreground">Покупайте звезды для Telegram по выгодным ценам</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {telegramProducts.map((product) => (
+                <Card key={product.id} className="group hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-accent/20">
+                  <CardHeader>
+                    <div className="flex items-start justify-between mb-2">
+                      <CardTitle className="text-2xl font-heading">{product.name}</CardTitle>
+                      {product.badge && (
+                        <Badge className="bg-secondary text-secondary-foreground">{product.badge}</Badge>
+                      )}
+                    </div>
+                    <CardDescription className="text-3xl font-bold text-accent">{product.amount}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-baseline gap-3">
+                      <span className="text-4xl font-bold">{formatPrice(product.price)}</span>
+                      {product.oldPrice && (
+                        <span className="text-xl text-muted-foreground line-through">{formatPrice(product.oldPrice)}</span>
+                      )}
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button className="w-full bg-gradient-to-r from-accent to-primary" onClick={() => addToCart(product)}>
                       <Icon name="ShoppingCart" className="mr-2" size={18} />
                       Добавить
                     </Button>
@@ -381,13 +571,13 @@ export default function Index() {
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-baseline gap-3">
-                      <span className="text-4xl font-bold">{product.price}₽</span>
+                      <span className="text-4xl font-bold">{formatPrice(product.price)}</span>
                       {product.oldPrice && (
-                        <span className="text-xl text-muted-foreground line-through">{product.oldPrice}₽</span>
+                        <span className="text-xl text-muted-foreground line-through">{formatPrice(product.oldPrice)}</span>
                       )}
                     </div>
                     <p className="text-sm text-secondary font-semibold mt-2">
-                      Экономия: {product.oldPrice && product.oldPrice - product.price}₽
+                      Экономия: {formatPrice(product.oldPrice! - product.price)}
                     </p>
                   </CardContent>
                   <CardFooter>
@@ -411,15 +601,16 @@ export default function Index() {
                 <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
                   <Icon name="Gamepad2" className="text-white" size={24} />
                 </div>
-                <span className="text-xl font-heading font-bold">GameShop</span>
+                <span className="text-xl font-heading font-bold">RBShop</span>
               </div>
               <p className="text-muted-foreground">Лучшие цены на игровую валюту. Быстро и безопасно.</p>
             </div>
             <div>
               <h3 className="font-semibold mb-4">Разделы</h3>
               <ul className="space-y-2 text-muted-foreground">
-                <li><button onClick={() => setActiveSection("shop")} className="hover:text-primary transition-colors">Магазин Robux</button></li>
+                <li><button onClick={() => setActiveSection("shop")} className="hover:text-primary transition-colors">Robux</button></li>
                 <li><button onClick={() => setActiveSection("standoff")} className="hover:text-primary transition-colors">Standoff 2</button></li>
+                <li><button onClick={() => setActiveSection("telegram")} className="hover:text-primary transition-colors">Telegram Stars</button></li>
                 <li><button onClick={() => setActiveSection("deals")} className="hover:text-primary transition-colors">Акции</button></li>
               </ul>
             </div>
@@ -433,7 +624,7 @@ export default function Index() {
             </div>
           </div>
           <div className="mt-8 pt-8 border-t border-border text-center text-muted-foreground">
-            <p>© 2026 GameShop. Все права защищены.</p>
+            <p>© 2026 RBShop. Все права защищены.</p>
           </div>
         </div>
       </footer>
