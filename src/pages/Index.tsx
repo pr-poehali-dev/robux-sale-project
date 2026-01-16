@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import Icon from "@/components/ui/icon";
 import { useToast } from "@/hooks/use-toast";
 
@@ -19,6 +20,14 @@ type Product = {
   oldPrice?: number;
   badge?: string;
   game: "robux" | "standoff" | "telegram";
+};
+
+type Review = {
+  id: number;
+  name: string;
+  rating: number;
+  text: string;
+  date: string;
 };
 
 type Currency = "RUB" | "EUR" | "UAH";
@@ -43,10 +52,10 @@ const products: Product[] = [
   { id: "5", name: "Mega Pack", amount: "1700 RB", price: 900, oldPrice: 1200, badge: "-25%", game: "robux" },
   { id: "6", name: "Ultra Pack", amount: "4500 RB", price: 2100, oldPrice: 2800, game: "robux" },
   
-  { id: "s1", name: "Starter Gold", amount: "1000 G", price: 297, game: "standoff" },
-  { id: "s2", name: "Gold Pack", amount: "2500 G", price: 597, oldPrice: 750, badge: "ХИТ", game: "standoff" },
-  { id: "s3", name: "Mega Gold", amount: "5000 G", price: 1050, oldPrice: 1350, badge: "ВЫГОДНО", game: "standoff" },
-  { id: "s4", name: "Ultra Gold", amount: "10000 G", price: 1950, oldPrice: 2700, badge: "-28%", game: "standoff" },
+  { id: "s1", name: "Starter Gold", amount: "1000 G", price: 891, game: "standoff" },
+  { id: "s2", name: "Gold Pack", amount: "2500 G", price: 1791, oldPrice: 2250, badge: "ХИТ", game: "standoff" },
+  { id: "s3", name: "Mega Gold", amount: "5000 G", price: 3150, oldPrice: 4050, badge: "ВЫГОДНО", game: "standoff" },
+  { id: "s4", name: "Ultra Gold", amount: "10000 G", price: 5850, oldPrice: 8100, badge: "-28%", game: "standoff" },
 
   { id: "t1", name: "Starter Stars", amount: "15 ⭐", price: 99, game: "telegram" },
   { id: "t2", name: "Popular Stars", amount: "50 ⭐", price: 199, oldPrice: 250, badge: "ХИТ", game: "telegram" },
@@ -54,7 +63,7 @@ const products: Product[] = [
   { id: "t4", name: "Ultra Stars", amount: "250 ⭐", price: 750, oldPrice: 950, badge: "ВЫГОДНО", game: "telegram" },
 ];
 
-const reviews = [
+const initialReviews: Review[] = [
   { id: 1, name: "Александр", rating: 5, text: "Отличный магазин! Робуксы пришли моментально, цены реально ниже чем везде!", date: "15.01.2026" },
   { id: 2, name: "Мария", rating: 5, text: "Покупала голду для Standoff 2, всё быстро и без проблем. Рекомендую!", date: "14.01.2026" },
   { id: 3, name: "Дмитрий", rating: 5, text: "Звезды для Telegram пришли за минуту. Поддержка отвечает быстро. Супер!", date: "13.01.2026" },
@@ -67,11 +76,24 @@ export default function Index() {
   const [cart, setCart] = useState<Product[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
+  const [userEmail, setUserEmail] = useState("");
   const [currency, setCurrency] = useState<Currency>("RUB");
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>(initialReviews);
+  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
+  const [newReviewText, setNewReviewText] = useState("");
+  const [newReviewRating, setNewReviewRating] = useState(5);
+  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const savedReviews = localStorage.getItem('rbshop_reviews');
+    if (savedReviews) {
+      setReviews(JSON.parse(savedReviews));
+    }
+  }, []);
 
   const convertPrice = (price: number) => {
     return Math.round(price * currencyRates[currency]);
@@ -82,6 +104,16 @@ export default function Index() {
   };
 
   const addToCart = (product: Product) => {
+    if (!isLoggedIn) {
+      toast({
+        title: "Требуется регистрация",
+        description: "Зарегистрируйтесь или войдите, чтобы добавлять товары в корзину",
+        variant: "destructive",
+      });
+      setIsAuthDialogOpen(true);
+      return;
+    }
+
     setCart([...cart, product]);
     toast({
       title: "Добавлено в корзину! 🎮",
@@ -89,11 +121,22 @@ export default function Index() {
     });
   };
 
+  const removeFromCart = (index: number) => {
+    const newCart = cart.filter((_, i) => i !== index);
+    setCart(newCart);
+    toast({
+      title: "Удалено из корзины",
+      description: "Товар успешно удален",
+    });
+  };
+
   const getTotalPrice = () => cart.reduce((sum, item) => sum + item.price, 0);
 
-  const handleAuth = (name: string) => {
+  const handleAuth = (name: string, email: string) => {
     setUsername(name);
+    setUserEmail(email);
     setIsLoggedIn(true);
+    setIsAuthDialogOpen(false);
     toast({
       title: "Добро пожаловать! 🚀",
       description: `${name}, приятных покупок!`,
@@ -110,15 +153,63 @@ export default function Index() {
       return;
     }
 
+    const orderDetails = cart.map(item => `${item.name} (${item.amount}) - ${formatPrice(item.price)}`).join('\n');
+    const telegramMessage = `🎮 Новый заказ!\n\nКлиент: ${username}\nEmail: ${userEmail}\n\nТовары:\n${orderDetails}\n\nИтого: ${formatPrice(getTotalPrice())}`;
+    
+    const telegramUrl = `https://t.me/hellowen69?text=${encodeURIComponent(telegramMessage)}`;
+    window.open(telegramUrl, '_blank');
+
     toast({
       title: "Успешно! ✅",
-      description: `Оплата на сумму ${formatPrice(getTotalPrice())} прошла успешно! Товары будут доставлены в течение 5 минут.`,
+      description: `Оплата на сумму ${formatPrice(getTotalPrice())} прошла успешно! Товары будут доставлены в течение 5 минут. Данные о заказе отправлены продавцу.`,
     });
 
     setCart([]);
     setCardNumber("");
     setIsCheckoutOpen(false);
     setIsCartOpen(false);
+  };
+
+  const handleAddReview = () => {
+    if (!isLoggedIn) {
+      toast({
+        title: "Требуется регистрация",
+        description: "Войдите в аккаунт, чтобы оставить отзыв",
+        variant: "destructive",
+      });
+      setIsAuthDialogOpen(true);
+      return;
+    }
+
+    if (!newReviewText.trim()) {
+      toast({
+        title: "Ошибка",
+        description: "Напишите текст отзыва",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newReview: Review = {
+      id: Date.now(),
+      name: username,
+      rating: newReviewRating,
+      text: newReviewText,
+      date: new Date().toLocaleDateString('ru-RU'),
+    };
+
+    const updatedReviews = [newReview, ...reviews];
+    setReviews(updatedReviews);
+    localStorage.setItem('rbshop_reviews', JSON.stringify(updatedReviews));
+
+    toast({
+      title: "Отзыв добавлен! ⭐",
+      description: "Спасибо за ваш отзыв!",
+    });
+
+    setNewReviewText("");
+    setNewReviewRating(5);
+    setIsReviewDialogOpen(false);
   };
 
   const robuxProducts = products.filter(p => p.game === "robux");
@@ -205,12 +296,22 @@ export default function Index() {
                   </SheetHeader>
                   <div className="mt-6 space-y-4">
                     {cart.map((item, index) => (
-                      <div key={index} className="flex justify-between items-center p-3 bg-muted rounded-lg">
-                        <div>
+                      <div key={index} className="flex justify-between items-center p-3 bg-muted rounded-lg group">
+                        <div className="flex-1">
                           <p className="font-semibold">{item.name}</p>
                           <p className="text-sm text-muted-foreground">{item.amount}</p>
                         </div>
-                        <p className="font-bold text-primary">{formatPrice(item.price)}</p>
+                        <div className="flex items-center gap-3">
+                          <p className="font-bold text-primary">{formatPrice(item.price)}</p>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => removeFromCart(index)}
+                          >
+                            <Icon name="Trash2" size={16} className="text-destructive" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                     {cart.length > 0 && (
@@ -239,7 +340,7 @@ export default function Index() {
                   <span className="text-sm font-medium">{username}</span>
                 </div>
               ) : (
-                <Dialog>
+                <Dialog open={isAuthDialogOpen} onOpenChange={setIsAuthDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="hidden md:flex bg-gradient-to-r from-primary to-secondary">
                       <Icon name="LogIn" className="mr-2" size={18} />
@@ -267,7 +368,10 @@ export default function Index() {
                         </div>
                         <Button
                           className="w-full bg-gradient-to-r from-primary to-secondary"
-                          onClick={() => handleAuth("Игрок")}
+                          onClick={() => {
+                            const email = (document.getElementById('login-email') as HTMLInputElement)?.value;
+                            if (email) handleAuth("Игрок", email);
+                          }}
                         >
                           Войти
                         </Button>
@@ -287,7 +391,11 @@ export default function Index() {
                         </div>
                         <Button
                           className="w-full bg-gradient-to-r from-primary to-secondary"
-                          onClick={() => handleAuth("Новичок")}
+                          onClick={() => {
+                            const name = (document.getElementById('reg-name') as HTMLInputElement)?.value;
+                            const email = (document.getElementById('reg-email') as HTMLInputElement)?.value;
+                            if (name && email) handleAuth(name, email);
+                          }}
                         >
                           Зарегистрироваться
                         </Button>
@@ -339,6 +447,52 @@ export default function Index() {
             >
               <Icon name="CheckCircle" className="mr-2" size={18} />
               Оплатить {formatPrice(getTotalPrice())}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Оставить отзыв</DialogTitle>
+            <DialogDescription>Поделитесь своим мнением о нашем магазине</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Оценка</Label>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    onClick={() => setNewReviewRating(star)}
+                    className="transition-transform hover:scale-110"
+                  >
+                    <Icon
+                      name="Star"
+                      size={32}
+                      className={star <= newReviewRating ? "fill-secondary text-secondary" : "text-muted-foreground"}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="review-text">Ваш отзыв</Label>
+              <Textarea
+                id="review-text"
+                placeholder="Напишите ваш отзыв..."
+                value={newReviewText}
+                onChange={(e) => setNewReviewText(e.target.value)}
+                rows={4}
+              />
+            </div>
+            <Button 
+              className="w-full bg-gradient-to-r from-primary to-secondary" 
+              onClick={handleAddReview}
+            >
+              <Icon name="Send" className="mr-2" size={18} />
+              Отправить отзыв
             </Button>
           </div>
         </DialogContent>
@@ -404,7 +558,22 @@ export default function Index() {
             </section>
 
             <section>
-              <h2 className="text-4xl font-heading font-bold mb-8">Отзывы наших клиентов</h2>
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-4xl font-heading font-bold">Отзывы наших клиентов</h2>
+                <Button 
+                  className="bg-gradient-to-r from-primary to-secondary"
+                  onClick={() => {
+                    if (!isLoggedIn) {
+                      setIsAuthDialogOpen(true);
+                    } else {
+                      setIsReviewDialogOpen(true);
+                    }
+                  }}
+                >
+                  <Icon name="Plus" className="mr-2" size={18} />
+                  Оставить отзыв
+                </Button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {reviews.map((review) => (
                   <Card key={review.id} className="hover:scale-105 transition-all duration-300">
@@ -618,7 +787,17 @@ export default function Index() {
               <h3 className="font-semibold mb-4">Поддержка</h3>
               <ul className="space-y-2 text-muted-foreground">
                 <li className="hover:text-primary transition-colors cursor-pointer">FAQ</li>
-                <li className="hover:text-primary transition-colors cursor-pointer">Связаться с нами</li>
+                <li>
+                  <a 
+                    href="https://t.me/hellowen69" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="hover:text-primary transition-colors flex items-center gap-2"
+                  >
+                    <Icon name="MessageCircle" size={16} />
+                    Telegram: @hellowen69
+                  </a>
+                </li>
                 <li className="hover:text-primary transition-colors cursor-pointer">Политика возврата</li>
               </ul>
             </div>
